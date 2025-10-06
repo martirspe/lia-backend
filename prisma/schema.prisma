@@ -1,0 +1,306 @@
+// ------------------------------------------------------------------
+// Prisma schema for Lia – Multi-tenant Chatbot Platform
+// PostgreSQL database
+// ------------------------------------------------------------------
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ================= Enums =================
+enum MessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+}
+
+enum SubStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum IngestType {
+  FILE
+  URL
+  API
+}
+
+// ================ Core / Tenant ================
+model Tenant {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  plan             String?
+  stripeCustomerId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users               User[]
+  bots                Bot[]
+  conversations       Conversation[]
+  files               File[]
+  ingestJobs          IngestJob[]
+  ragDocuments        RagDocument[]
+  subscriptions       Subscription[]
+  apiKeys             ApiKey[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String   @unique
+  name      String?
+  password  String
+  role      String   @default("MEMBER") // OWNER|ADMIN|MEMBER
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  conversations       Conversation[]
+  passwordResetTokens PasswordResetToken[]
+  apiKeys             ApiKey[]
+  refreshTokens       RefreshToken[]
+  auditLogs           AuditLog[]
+
+  @@index([tenantId, role])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  userId     String?
+  name       String
+  prefix     String // <--- ADD (para búsquedas rápidas / mostrar parcialmente)
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revoked    Boolean   @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
+  @@index([prefix])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  tokenHash String    @unique
+  device    String?
+  ip        String?
+  userAgent String?
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, userId])
+  @@index([expiresAt])
+  @@index([tokenHash])
+  @@index([revokedAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  token     String   @unique
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, userId])
+  @@index([token])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action])
+}
+
+// ================= Bots =================
+model Bot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  plan          String?
+  systemPrompt  String?
+  temperature   Float?   @default(0.7)
+  topP          Float?   @default(1)
+  ragEnabled    Boolean  @default(false)
+  ragTopK       Int      @default(5)
+  ragSemantic   Boolean  @default(true)
+  ragPromptNote String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+  files         File[]
+  ingestJobs    IngestJob[]
+  ragDocuments  RagDocument[]
+
+  @@index([tenantId, createdAt])
+}
+
+// ================= Chat =================
+model Conversation {
+  id        String    @id @default(cuid())
+  tenantId  String
+  botId     String
+  userId    String?
+  title     String?
+  status    String    @default("open")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bot    Bot    @relation(fields: [botId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, botId, createdAt])
+  @@index([tenantId, userId, createdAt])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  tenantId       String
+  role           MessageRole
+  content        String
+  tokensInput    Int?        @default(0)
+  tokensOutput   Int?        @default(0)
+  model          String?
+  latencyMs      Int?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+// ================= Files & Ingest =================
+model File {
+  id           String   @id @default(cuid())
+  tenantId     String
+  botId        String?
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  storagePath  String
+  status       String   @default("stored") // stored|processing|ready|error
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  bot        Bot?        @relation(fields: [botId], references: [id])
+  ingestJobs IngestJob[]
+
+  @@index([tenantId, botId])
+}
+
+model IngestJob {
+  id            String   @id @default(cuid())
+  tenantId      String
+  botId         String?
+  fileId        String?
+  url           String?
+  source        String?
+  type          IngestType  @default(FILE) // FILE | URL | API
+  status        String   @default("pending") // pending|running|completed|failed
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bot    Bot?   @relation(fields: [botId], references: [id])
+  file   File?   @relation(fields: [fileId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([fileId])
+}
+
+// ================= Billing =================
+model Subscription {
+  id               String    @id @default(cuid())
+  tenantId         String    @unique
+  stripeSubId      String    @unique
+  status           SubStatus
+  currentPeriodEnd DateTime
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+// ================= RAG =================
+model RagDocument {
+  id        String     @id @default(cuid())
+  tenantId  String
+  botId     String?
+  title     String
+  source    String?
+  mimeType  String?
+  size      Int?
+  status    String     @default("ready")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  chunks    RagChunk[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  bot    Bot?   @relation(fields: [botId], references: [id])
+
+  @@index([tenantId, botId])
+}
+
+model RagChunk {
+  id         String   @id @default(cuid())
+  tenantId   String
+  documentId String
+  botId      String?
+  idx        Int
+  content    String
+  embedding  Json
+  createdAt  DateTime @default(now())
+
+  document RagDocument @relation(fields: [documentId], references: [id])
+
+  @@unique([documentId, idx])
+  @@index([tenantId, botId])
+  @@index([tenantId])
+}
