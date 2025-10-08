@@ -47,6 +47,12 @@ export class PrismaAuthRepository {
         revokedAt: null,
         expiresAt: { gt: new Date() },
       },
+      select: { id: true, tenantId: true, userId: true, expiresAt: true }, // userId necesario
     });
+  }
+
+  // Nuevo: buscar usuario por ID dentro del tenant
+  async findUserById(tenantId: string, userId: string): Promise<User | null> {
+    return this.prisma.user.findFirst({ where: { id: userId, tenantId } });
   }
 }

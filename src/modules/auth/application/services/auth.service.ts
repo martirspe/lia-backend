@@ -49,15 +49,7 @@ export class AuthService {
     const rt = await this.repo.findValidRefreshToken(tenantId, token);
     if (!rt) throw new UnauthorizedException('Invalid refresh token');
 
-    // Optionally fetch user for latest role/email
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const user = await this.repo.findUserByEmail(
-      tenantId,
-      (await (async () => {
-        const u = await (global as any).prisma?.user?.findUnique?.({ where: { id: rt.userId } });
-        return u?.email;
-      })()) || '',
-    );
+    const user = await this.repo.findUserById(tenantId, rt.userId);
     if (!user) throw new UnauthorizedException('User not found');
 
     const accessToken = this.jwt.signAccess({

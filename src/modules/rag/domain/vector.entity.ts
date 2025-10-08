@@ -1,7 +1,7 @@
 export type VectorPayload = {
   tenantId: string;
   botId?: string | null;
-  documentId: string;
+  fileId: string;
   chunkIdx: number;
   title?: string | null;
   source?: string | null;

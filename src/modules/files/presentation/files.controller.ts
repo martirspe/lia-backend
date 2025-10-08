@@ -13,6 +13,7 @@ import {
   UseGuards,
   UsePipes,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import * as fs from 'fs';
@@ -51,14 +52,14 @@ export class FilesController {
     @Req() req: FastifyRequest,
   ) {
     const part: any = await (req as any).file({ limits: { files: 1 } });
-    if (!part) throw new Error('File not received');
+    if (!part) throw new BadRequestException('File not received');
 
     const allowedCsv =
       (this.config.get<string>('files.allowedExtensions') ??
         '.pdf,.docx,.txt,.md,.pptx,.xlsx').toLowerCase();
     const allowed = allowedCsv.split(',').map((e) => e.trim());
     const ext = (path.extname(part.filename) || '').toLowerCase();
-    if (!allowed.includes(ext)) throw new Error(`Unsupported file type: ${ext}`);
+    if (!allowed.includes(ext)) throw new BadRequestException(`Unsupported file type: ${ext}`);
 
     const buffer: Buffer =
       typeof part.toBuffer === 'function'

@@ -13,7 +13,7 @@ export class GenerateEmbeddingUseCase {
   async execute(params: {
     tenantId: string;
     botId?: string | null;
-    documentId: string;
+    fileId: string;
     chunkIdx: number;
     content: string;
     title?: string | null;
@@ -24,14 +24,14 @@ export class GenerateEmbeddingUseCase {
     const payload: VectorPayload = {
       tenantId: params.tenantId,
       botId: params.botId ?? null,
-      documentId: params.documentId,
+      fileId: params.fileId,
       chunkIdx: params.chunkIdx,
       title: params.title ?? null,
       source: params.source ?? null,
       content: params.content,
     };
     const entity = new VectorEntity(
-      `${params.documentId}:${params.chunkIdx}`,
+      `${params.fileId}:${params.chunkIdx}`,
       vector,
       payload,
     );

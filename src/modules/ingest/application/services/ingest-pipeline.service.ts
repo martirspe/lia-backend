@@ -81,7 +81,7 @@ export class IngestPipelineService {
       await this.generateEmbeddingUC.execute({
         tenantId,
         botId,
-        documentId,
+        fileId: documentId,
         chunkIdx: c.idx,
         content: c.content,
         title: c.title,
