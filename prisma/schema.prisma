@@ -32,13 +32,18 @@ enum IngestType {
   API
 }
 
+enum BillingProvider {
+  PAYPAL
+  STRIPE
+}
+
 // ================ Core / Tenant ================
 model Tenant {
   id               String   @id @default(cuid())
   name             String
   slug             String   @unique
   plan             String?
-  stripeCustomerId String?
+  billingCustomerId String? // Generic (reemplaza stripeCustomerId)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -80,7 +85,7 @@ model ApiKey {
   tenantId   String
   userId     String?
   name       String
-  prefix     String // <--- ADD (para búsquedas rápidas / mostrar parcialmente)
+  prefix     String
   keyHash    String    @unique
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -235,21 +240,21 @@ model File {
 }
 
 model IngestJob {
-  id            String   @id @default(cuid())
-  tenantId      String
-  botId         String?
-  fileId        String?
-  url           String?
-  source        String?
-  type          IngestType  @default(FILE) // FILE | URL | API
-  status        String   @default("pending") // pending|running|completed|failed
-  error         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String      @id @default(cuid())
+  tenantId  String
+  botId     String?
+  fileId    String?
+  url       String?
+  source    String?
+  type      IngestType  @default(FILE) // FILE | URL | API
+  status    String      @default("pending") // pending|running|completed|failed
+  error     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   bot    Bot?   @relation(fields: [botId], references: [id])
-  file   File?   @relation(fields: [fileId], references: [id])
+  file   File?  @relation(fields: [fileId], references: [id])
 
   @@index([tenantId, status])
   @@index([fileId])
@@ -257,15 +262,19 @@ model IngestJob {
 
 // ================= Billing =================
 model Subscription {
-  id               String    @id @default(cuid())
-  tenantId         String    @unique
-  stripeSubId      String    @unique
+  id               String          @id @default(cuid())
+  tenantId         String          @unique
+  provider         BillingProvider // 'PAYPAL' | 'STRIPE' ...
+  providerSubId    String          @unique // ID externo: p.ej. "I-ABC123DEF"
   status           SubStatus
   currentPeriodEnd DateTime
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  cancelAtPeriodEnd Boolean        @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([provider, providerSubId])
 }
 
 // ================= RAG =================

@@ -1,43 +1,29 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
-import { BillingController } from './presentation/billing.controller';
+import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
 import { BillingRepository } from './infrastructure/billing.repository';
-import { EnsureCustomerUseCase } from './application/use-cases/ensure-customer.usecase';
-import { CreateCheckoutSessionUseCase } from './application/use-cases/create-checkout-session.usecase';
-import { CreatePortalSessionUseCase } from './application/use-cases/create-portal-session.usecase';
+import { PaypalProvider } from './infrastructure/providers/paypal.provider';
+import { SubscribeUseCase } from './application/use-cases/subscribe.usecase';
+import { UpdateSubscriptionUseCase } from './application/use-cases/update-subscription.usecase';
+import { CancelSubscriptionUseCase } from './application/use-cases/cancel-subscription.usecase';
 import { GetSubscriptionUseCase } from './application/use-cases/get-subscription.usecase';
-import { HandleStripeWebhookUseCase } from './application/use-cases/handle-stripe-webhook.usecase';
-import { BillingProvider } from './domain/billing.provider';
-import { BillingWebhookController } from './presentation/billing-webhook.controller';
-import { StripeBillingProvider } from './infrastructure/stripe.billing.provider';
-import { NoopBillingProvider } from './infrastructure/noop.billing.provider';
+import { ProcessWebhookUseCase } from './application/use-cases/process-webhook.usecase';
+import { BillingController } from './presentation/billing.controller';
+import { BillingWebhooksController } from './presentation/webhooks.controller';
 
 
 @Module({
-  imports: [ConfigModule, PrismaModule, AuthModule],
-  controllers: [BillingController, BillingWebhookController],
+  imports: [AuthModule, PrismaModule],
+  controllers: [BillingController, BillingWebhooksController],
   providers: [
     BillingRepository,
-    EnsureCustomerUseCase,
-    CreateCheckoutSessionUseCase,
-    CreatePortalSessionUseCase,
+    PaypalProvider,
+    SubscribeUseCase,
+    UpdateSubscriptionUseCase,
+    CancelSubscriptionUseCase,
     GetSubscriptionUseCase,
-    HandleStripeWebhookUseCase,
-    {
-      provide: BillingProvider,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const enabled = !!config.get<boolean>('stripe.enabled');
-        const key = config.get<string>('stripe.secretKey');
-        if (enabled && key) {
-          return new StripeBillingProvider(config);
-        }
-        return new NoopBillingProvider();
-      },
-    },
+    ProcessWebhookUseCase,
   ],
-  exports: [BillingRepository, BillingProvider],
+  exports: [BillingRepository],
 })
 export class BillingModule { }

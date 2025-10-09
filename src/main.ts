@@ -34,37 +34,40 @@ async function bootstrap() {
     fastifyAdapter,
   );
 
+  // Seguridad/CORS/RateLimit
+  const helmet = (await import('@fastify/helmet')).default;
+  const cors = (await import('@fastify/cors')).default;
+  const rateLimit = (await import('@fastify/rate-limit')).default;
+  const multipart = (await import('@fastify/multipart')).default;
+
   // Prefijo global de la API
   /* app.setGlobalPrefix('api'); */
 
   // Plugins @fastify/* (v10+ / v13+) por import dinámico para evitar TS2345
   if (cfg.security.enableHelmet) {
-    const helmet = (await import('@fastify/helmet')).default as any;
-    await app.register(helmet, {
+    await app.register(helmet as any, {
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
-    } as any);
+    });
   }
 
-  const cors = (await import('@fastify/cors')).default as any;
   const corsOrigin = (cfg.security.corsOrigin || '*').trim();
-  await app.register(cors, {
+  await app.register(cors as any, {
     origin:
       corsOrigin === '*'
         ? true
         : corsOrigin.split(',').map((s) => s.trim()),
     credentials: true,
-  } as any);
+  });
 
-  const rateLimit = (await import('@fastify/rate-limit')).default as any;
-  await app.register(rateLimit, {
+  await app.register(rateLimit as any, {
     max: cfg.security.rateLimitPerMinute,
     timeWindow: '1 minute',
     keyGenerator: (req: any) => {
       const tenant = req.headers['x-tenant-id'] ?? 'public';
       return `${tenant}:${req.ip}`;
     },
-  } as any);
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -78,14 +81,13 @@ async function bootstrap() {
   app.useGlobalInterceptors(new LoggingInterceptor(), new TimeoutInterceptor());
 
   // Soporte multipart para Fastify (requerido para subir archivos)
-  const multipart = (await import('@fastify/multipart')).default as any;
-  await app.register(multipart, {
+  await app.register(multipart as any, {
     attachFieldsToBody: false,
     limits: {
       fileSize: (cfg.files?.maxSizeMb ?? 20) * 1024 * 1024,
       files: 1,
     },
-  } as any);
+  });
 
   // Redis adapter for WebSockets (Socket.IO)
   try {

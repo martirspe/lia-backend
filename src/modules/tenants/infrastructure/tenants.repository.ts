@@ -32,10 +32,10 @@ export class TenantsRepository {
     });
   }
 
-  async attachStripeCustomer(tenantId: string, stripeCustomerId: string) {
+  async attachStripeCustomer(tenantId: string, billingCustomerId: string) {
     return this.prisma.tenant.update({
       where: { id: tenantId },
-      data: { stripeCustomerId },
+      data: { billingCustomerId },
     });
   }
 

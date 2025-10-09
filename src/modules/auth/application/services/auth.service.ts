@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaAuthRepository } from '../../infrastructure/prisma-auth.repository';
+import { AuthRepository } from '../../infrastructure/auth.repository';
 import { JwtService } from '../../infrastructure/jwt.service';
 import { BcryptService } from '../../infrastructure/bcrypt.service';
 
@@ -11,7 +11,7 @@ export class AuthService {
 
   // El constructor inyecta las dependencias necesarias
   constructor(
-    private readonly repo: PrismaAuthRepository,
+    private readonly repo: AuthRepository,
     private readonly jwt: JwtService,
     private readonly bcrypt: BcryptService,
     private readonly config: ConfigService,

@@ -5,7 +5,7 @@ import { randomBytes, createHash } from 'crypto';
 
 // Repositorio para manejar la autenticación usando Prisma ORM
 @Injectable()
-export class PrismaAuthRepository {
+export class AuthRepository {
   constructor(private readonly prisma: PrismaService) { }
 
   // Buscar un usuario por su email dentro de un tenant específico

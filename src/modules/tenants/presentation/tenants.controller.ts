@@ -53,7 +53,7 @@ export class TenantsController {
   async me(@Headers('x-tenant-id') tenantId: string) {
     const t = await this.repo.getById(tenantId);
     if (!t) return { error: 'Tenant not found' };
-    return { id: t.id, name: t.name, slug: t.slug, plan: t.plan, stripeCustomerId: t.stripeCustomerId };
+    return { id: t.id, name: t.name, slug: t.slug, plan: t.plan, billingCustomerId: t.billingCustomerId };
   }
 
   // Update (OWNER o ADMIN). Enforce path id == header tenantId.

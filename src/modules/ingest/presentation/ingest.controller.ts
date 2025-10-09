@@ -55,6 +55,7 @@ export class IngestController {
   }
 
   @Post('url')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
   @HttpCode(202)
   async ingestUrl(
     @Headers('x-tenant-id') tenantId: string,
@@ -69,6 +70,7 @@ export class IngestController {
   }
 
   @Post('api')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
   @HttpCode(202)
   async ingestApi(
     @Headers('x-tenant-id') tenantId: string,

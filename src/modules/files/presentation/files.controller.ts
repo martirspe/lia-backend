@@ -1,7 +1,7 @@
 import {
+  BadRequestException,
   Body,
   Controller,
-  Delete,
   Get,
   Headers,
   HttpCode,
@@ -13,60 +13,48 @@ import {
   UseGuards,
   UsePipes,
   Req,
-  BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ValidationPipe } from '../../../common/pipes/validation.pipe';
 import { AuthGuard } from '../../../common/guards/auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
-import { ValidationPipe } from '../../../common/pipes/validation.pipe';
-import { UploadFileDto } from '../application/dto/upload-file.dto';
-import { ListFilesDto } from '../application/dto/list-files.dto';
+import { ConfigService } from '@nestjs/config';
 import { UploadFileUseCase } from '../application/use-cases/upload-file.usecase';
 import { ListFilesUseCase } from '../application/use-cases/list-files.usecase';
 import { GetFileUseCase } from '../application/use-cases/get-file.usecase';
 import { DeleteFileUseCase } from '../application/use-cases/delete-file.usecase';
-import { TriggerIngestUseCase } from '../application/use-cases/trigger-ingest.usecase';
-import { ConfigService } from '@nestjs/config';
 
 @Controller('files')
-@UsePipes(ValidationPipe)
 @UseGuards(AuthGuard, RolesGuard)
+@UsePipes(ValidationPipe)
 export class FilesController {
   constructor(
     private readonly uploadUC: UploadFileUseCase,
     private readonly listUC: ListFilesUseCase,
     private readonly getUC: GetFileUseCase,
     private readonly deleteUC: DeleteFileUseCase,
-    private readonly ingestUC: TriggerIngestUseCase,
     private readonly config: ConfigService,
   ) { }
 
   @Post('upload')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @HttpCode(201)
-  async upload(
-    @Headers('x-tenant-id') tenantId: string,
-    @Req() req: FastifyRequest,
-  ) {
+  async upload(@Headers('x-tenant-id') tenantId: string, @Req() req: FastifyRequest) {
     const part: any = await (req as any).file({ limits: { files: 1 } });
     if (!part) throw new BadRequestException('File not received');
 
-    const allowedCsv =
-      (this.config.get<string>('files.allowedExtensions') ??
-        '.pdf,.docx,.txt,.md,.pptx,.xlsx').toLowerCase();
-    const allowed = allowedCsv.split(',').map((e) => e.trim());
+    const allowedCsv = (this.config.get<string>('files.allowedExtensions') || '').toLowerCase();
+    const allowed = allowedCsv.split(',').map((e) => e.trim()).filter(Boolean);
     const ext = (path.extname(part.filename) || '').toLowerCase();
-    if (!allowed.includes(ext)) throw new BadRequestException(`Unsupported file type: ${ext}`);
+    if (allowed.length && !allowed.includes(ext)) {
+      throw new BadRequestException(`Unsupported file type: ${ext}`);
+    }
 
-    const buffer: Buffer =
-      typeof part.toBuffer === 'function'
-        ? await part.toBuffer()
-        : await streamToBuffer(part.file);
-
-    // campos del form-data
+    const buffer: Buffer = typeof part.toBuffer === 'function' ? await part.toBuffer() : await streamToBuffer(part.file);
     const fields = (part.fields || {}) as Record<string, any>;
     const botId = readField(fields, 'botId');
     const ingest = toBool(readField(fields, 'ingest'));
@@ -92,33 +80,6 @@ export class FilesController {
     };
   }
 
-  @Get()
-  @Roles('OWNER', 'ADMIN', 'MEMBER')
-  async list(
-    @Headers('x-tenant-id') tenantId: string,
-    @Query() query: ListFilesDto,
-  ) {
-    const page = Number(query.page ?? 1);
-    const pageSize = Math.min(Number(query.pageSize ?? 20), 100);
-    return this.listUC.execute({
-      tenantId,
-      botId: query.botId,
-      status: query.status,
-      page,
-      pageSize,
-      q: query.q,
-    });
-  }
-
-  @Get(':id')
-  @Roles('OWNER', 'ADMIN', 'MEMBER')
-  async get(
-    @Headers('x-tenant-id') tenantId: string,
-    @Param('id') id: string,
-  ) {
-    return this.getUC.execute({ tenantId, id });
-  }
-
   @Get(':id/download')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   async download(
@@ -134,20 +95,19 @@ export class FilesController {
     return new StreamableFile(stream);
   }
 
-  @Post(':id/ingest')
+  @Get()
   @Roles('OWNER', 'ADMIN', 'MEMBER')
-  @HttpCode(202)
-  async ingest(
-    @Headers('x-tenant-id') tenantId: string,
-    @Param('id') id: string,
-    @Body('botId') botId?: string,
-  ) {
-    const f = await this.getUC.execute({ tenantId, id });
-    const effectiveBotId = botId || f.botId;
-    if (!effectiveBotId) {
-      return { error: 'botId required to ingest this file' };
-    }
-    return this.ingestUC.execute({ tenantId, botId: effectiveBotId, fileId: id });
+  async list(@Headers('x-tenant-id') tenantId: string, @Query() q: any) {
+    const page = Number(q.page ?? 1);
+    const pageSize = Math.min(Number(q.pageSize ?? 20), 100);
+    return this.listUC.execute({
+      tenantId,
+      botId: q.botId,
+      status: q.status,
+      page,
+      pageSize,
+      q: q.q,
+    });
   }
 
   @Delete(':id')
@@ -157,12 +117,12 @@ export class FilesController {
   }
 }
 
-// Helpers
 function readField(fields: Record<string, any>, key: string): string | undefined {
   const v = fields?.[key];
   if (v == null) return undefined;
   return typeof v === 'object' && 'value' in v ? (v.value as string) : (v as string);
 }
+
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = [];
   return await new Promise<Buffer>((resolve, reject) => {
@@ -171,6 +131,7 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
     stream.on('error', (err) => reject(err));
   });
 }
+
 function toBool(v: string | undefined): boolean {
   if (!v) return false;
   return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());

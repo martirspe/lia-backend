@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -12,10 +13,11 @@ import { AuthGuard } from '../../../common/guards/auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { ValidationPipe } from '../../../common/pipes/validation.pipe';
-import { CheckoutSessionDto } from '../application/dto/checkout-session.dto';
-import { PortalSessionDto } from '../application/dto/portal-session.dto';
-import { CreateCheckoutSessionUseCase } from '../application/use-cases/create-checkout-session.usecase';
-import { CreatePortalSessionUseCase } from '../application/use-cases/create-portal-session.usecase';
+import { CreateSubscriptionDto } from '../application/dto/create-subscription.dto';
+import { UpdateSubscriptionDto } from '../application/dto/update-subscription.dto';
+import { SubscribeUseCase } from '../application/use-cases/subscribe.usecase';
+import { UpdateSubscriptionUseCase } from '../application/use-cases/update-subscription.usecase';
+import { CancelSubscriptionUseCase } from '../application/use-cases/cancel-subscription.usecase';
 import { GetSubscriptionUseCase } from '../application/use-cases/get-subscription.usecase';
 
 @Controller('billing')
@@ -23,39 +25,40 @@ import { GetSubscriptionUseCase } from '../application/use-cases/get-subscriptio
 @UseGuards(AuthGuard, RolesGuard)
 export class BillingController {
   constructor(
-    private readonly checkoutUC: CreateCheckoutSessionUseCase,
-    private readonly portalUC: CreatePortalSessionUseCase,
-    private readonly getSubUC: GetSubscriptionUseCase,
-  ) {}
-
-  @Post('checkout-session')
-  @Roles('OWNER', 'ADMIN')
-  @HttpCode(201)
-  async checkout(
-    @Headers('x-tenant-id') tenantId: string,
-    @Body() dto: CheckoutSessionDto,
-  ) {
-    return this.checkoutUC.execute({
-      tenantId,
-      priceId: dto.priceId,
-      successUrl: dto.successUrl,
-      cancelUrl: dto.cancelUrl,
-    });
-  }
-
-  @Post('portal-session')
-  @Roles('OWNER', 'ADMIN')
-  @HttpCode(201)
-  async portal(
-    @Headers('x-tenant-id') tenantId: string,
-    @Body() dto: PortalSessionDto,
-  ) {
-    return this.portalUC.execute({ tenantId, returnUrl: dto.returnUrl });
-  }
+    private readonly subscribeUC: SubscribeUseCase,
+    private readonly updateUC: UpdateSubscriptionUseCase,
+    private readonly cancelUC: CancelSubscriptionUseCase,
+    private readonly getUC: GetSubscriptionUseCase,
+  ) { }
 
   @Get('subscription')
   @Roles('OWNER', 'ADMIN')
-  async getSubscription(@Headers('x-tenant-id') tenantId: string) {
-    return this.getSubUC.execute(tenantId);
+  async get(@Headers('x-tenant-id') tenantId: string) {
+    return this.getUC.execute({ tenantId });
+  }
+
+  @Post('subscription')
+  @Roles('OWNER')
+  @HttpCode(201)
+  async create(
+    @Headers('x-tenant-id') tenantId: string,
+    @Body() dto: CreateSubscriptionDto,
+  ) {
+    return this.subscribeUC.execute({ tenantId, planId: dto.planId });
+  }
+
+  @Post('subscription/plan')
+  @Roles('OWNER')
+  async changePlan(
+    @Headers('x-tenant-id') tenantId: string,
+    @Body() dto: UpdateSubscriptionDto,
+  ) {
+    return this.updateUC.execute({ tenantId, planId: dto.planId });
+  }
+
+  @Delete('subscription')
+  @Roles('OWNER')
+  async cancel(@Headers('x-tenant-id') tenantId: string) {
+    return this.cancelUC.execute({ tenantId });
   }
 }
